@@ -4,8 +4,8 @@ import pandas as pd
 
 
 def compound_ratio(G, R, qg=0.98, qr=0.95, lag=0):
-    """Observed frequency of (gust > its qg quantile and rain > its qr quantile of wet days) over the product of the margins.
-    Rain quantiles are taken over all winter days. Returns per-cell frequency and the ratio to independence."""
+    """Observed frequency of (gust > its qg quantile and rain > its qr quantile) over the product of the margins.
+    Both quantiles are taken over all winter days. Returns per-cell frequency and the ratio to independence."""
     Gw, Rw = G, R.shift(lag) if lag else R
     eg = Gw > Gw.quantile(qg)
     er = Rw > Rw.quantile(qr)

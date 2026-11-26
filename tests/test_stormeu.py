@@ -70,3 +70,50 @@ def test_compound_ratio_is_one_for_independent():
     R = pd.DataFrame(rng.standard_normal((400000, 3)))
     _, ratio = compound.compound_ratio(G, R)
     assert abs(ratio.mean() - 1) < 0.1
+
+
+def test_evt_recovers_covariate_effect():
+    import numpy as np
+    from stormeu import evt
+    rng = np.random.default_rng(3)
+    X = rng.standard_normal((3000, 2))
+    scale = np.exp(1.0 + 0.0 * X[:, 0] + 0.3 * X[:, 1])
+    xi = -0.1
+    y = scale / xi * (rng.uniform(size=3000) ** (-xi) - 1)
+    f = evt.fit_cell(y, X)
+    assert abs(f["slopes"][1] - 0.3) < 0.06 and abs(f["slopes"][0]) < 0.06 and abs(f["xi"] - xi) < 0.06
+
+
+def test_decluster_and_fdr():
+    import numpy as np
+    import pandas as pd
+    from stormeu import evt
+    s = pd.Series([0, 5, 7, 0, 0, 0, 6, 0], index=pd.date_range("2000-01-01", periods=8))
+    assert list(evt.decluster(s, 1)) == [7, 6]
+    assert evt.false_discovery(np.array([0.001, 0.002, 0.9, 0.95])) == 2
+
+
+def test_absolute_threshold_model_uses_metres_per_second():
+    import numpy as np
+    from stormeu import resample
+    th = {"v0": np.array([20.0]), "p": np.array([2.0]), "log10_scale": np.array([0.0])}
+    F = np.array([[70.0, 70.0], [108.0, 108.0]])   # km/h: 19.4 and 30 m/s
+    L = resample.loss_fn("B", th, F, None)
+    assert L[0, 0] == 0 and abs(L[0, 1] - 1.0) < 1e-9
+
+
+def test_inferred_error_grows_with_misfit():
+    rng = np.random.default_rng(6)
+    base = np.exp(rng.normal(0, 1, 8))
+    obs = base * 1000 * np.exp(rng.normal(0, 0.9, 8))
+    L1 = np.tile(base, (4000, 1))
+    sig = np.exp(rng.uniform(np.log(0.15), np.log(1.5), 4000))
+    w = resample.importance_shape(L1, obs, sig=sig)[0]
+    assert np.sum(w * sig) > 0.5
+    assert abs(resample.log_rmse(np.array([2.0, 2.0]), np.array([1.0, 4.0])) - np.log(2)) < 1e-12
+
+
+def test_persistent_mixing_keeps_uniform_margins():
+    chol = np.eye(3)
+    U = copula.simulate_scores(chol, 200, 0.5, 6, np.random.default_rng(7), n_seasons=200, kappa=0.9)
+    assert abs(U.mean() - 0.5) < 0.02 and abs((U > 0.95).mean() - 0.05) < 0.012

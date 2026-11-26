@@ -3,7 +3,7 @@ and the effect on the 1-in-200 annual aggregate loss from a stochastic event set
 
 Models (on the German cells of the grid, uniform weights because no population grid was used):
 A  relative threshold  l = max(0, v / v_q - 1) ** p
-B  absolute threshold  l = max(0, (v - v0) / 10) ** p
+B  absolute threshold  l = max(0, (v - v0) / 10) ** p, v and v0 in m/s (the footprints are in km/h and are converted here)
 C  as A with saturating damage  l = min(l_A, cap)   (the third structural variant)
 Event loss = scale * mean over cells of l, in million EUR. Observation error 15% and structural discrepancy 25% on the log scale
 (assumptions as in unrisk-windstorm-uq).
@@ -18,6 +18,7 @@ PRIOR = {"A": {"q": (0.95, 0.995), "p": (2.0, 4.0), "log10_scale": (3.0, 6.0)},
          "B": {"v0": (14.0, 30.0), "p": (2.0, 4.0), "log10_scale": (3.0, 6.0)},
          "C": {"q": (0.95, 0.995), "p": (1.0, 3.0), "cap": (0.05, 1.0), "log10_scale": (3.0, 6.0)}}
 SIG = np.hypot(0.15, 0.25)
+KMH_PER_MS = 3.6   # Open-Meteo gusts are in km/h
 QGRID = np.array([0.90, 0.95, 0.97, 0.98, 0.99, 0.995])
 
 
@@ -38,7 +39,7 @@ def loss_fn(model, th, F, vq_grid):
             if model == "C":
                 raw = np.minimum(raw, th["cap"][i])
         else:
-            raw = np.clip((F - th["v0"][i]) / 10.0, 0, None) ** th["p"][i]
+            raw = np.clip((F / KMH_PER_MS - th["v0"][i]) / 10.0, 0, None) ** th["p"][i]
         out[i] = raw.mean(axis=1) * 10 ** th["log10_scale"][i]
     return out
 
@@ -65,13 +66,14 @@ def annual_loss(L_events, season_idx, n_seasons):
     return a
 
 
-def importance_shape(L1, obs, lo=3.0, hi=6.0):
+def importance_shape(L1, obs, lo=3.0, hi=6.0, sig=None):
     """Shape parameters importance-weighted with the scale integrated out analytically.
 
     L1: (n, storms) modelled losses with unit scale. On the log scale the likelihood is Gaussian with sd SIG, and the log scale has a
     flat prior on [lo, hi] (log10). For each shape draw the best log scale is the mean of log(obs) - log(L1); its conditional
-    distribution is normal with variance SIG^2 / m. Weights are the marginal likelihoods (flat prior on the scale is integrated over
-    the part inside [lo, hi]); returns weights, effective sample size and one scale draw per shape draw."""
+    distribution is normal with variance sig^2 / m. Weights are the marginal likelihoods (flat prior on the scale is integrated over
+    the part inside [lo, hi]). `sig` is the log-scale error: SIG (fixed) by default, or one value per draw, in which case the data
+    also weight it. Returns weights, effective sample size, the mean and sd of the natural-log scale per draw and the bounds."""
     from scipy.stats import norm
 
     m = obs.size
@@ -79,14 +81,20 @@ def importance_shape(L1, obs, lo=3.0, hi=6.0):
     lr = np.log(obs)[None] - np.log(np.maximum(L1, 1e-9))   # a storm with no modelled loss is heavily penalised, not excluded
     mu = lr.mean(axis=1)
     ss = ((lr - mu[:, None]) ** 2).sum(axis=1)
-    sd = SIG / np.sqrt(m)
+    sig = np.broadcast_to(SIG if sig is None else sig, (len(L1),)).astype(float)
+    sd = sig / np.sqrt(m)
     a, b = lo * np.log(10), hi * np.log(10)
     mass = norm.cdf((b - mu) / sd) - norm.cdf((a - mu) / sd)
-    ll = -0.5 * ss / SIG ** 2 + np.log(np.maximum(mass, 1e-300))
+    ll = -(m - 1) * np.log(sig) - 0.5 * ss / sig ** 2 + np.log(np.maximum(mass, 1e-300))
     ll = np.where(ok, ll, -np.inf)
     w = np.exp(ll - ll.max())
     w /= w.sum()
     return w, float(1.0 / (w ** 2).sum()), mu, sd, (a, b)
+
+
+def log_rmse(modelled, obs):
+    """Root mean square error of log(modelled / observed) over the storms."""
+    return float(np.sqrt(np.mean(np.log(np.maximum(modelled, 1e-9) / obs) ** 2)))
 
 
 def draw_scale(mu, sd, bounds, rng):

@@ -1,0 +1,39 @@
+{
+ "n_models": 12,
+ "EA": {
+  "mean_change_sd": -0.0528427712952019,
+  "range": [
+   -0.6005847984281968,
+   0.5222861122467234
+  ],
+  "models_positive": 4,
+  "model_sd_over_era5_mean": 0.9938888931097019,
+  "std_ratio_late_over_base_mean": 0.9569762618582814
+ },
+ "NAO": {
+  "mean_change_sd": 0.17738824709466858,
+  "range": [
+   -0.11146704487883059,
+   0.4299661105518813
+  ],
+  "models_positive": 9,
+  "model_sd_over_era5_mean": 0.8862287223155434,
+  "std_ratio_late_over_base_mean": 0.967119529409809
+ },
+ "amoc": {
+  "n_models": 10,
+  "change_pct_mean": -38.058670737236014,
+  "change_pct_range": [
+   -53.35848041745383,
+   -22.142813417994656
+  ],
+  "spearman_vs_EA_shift": {
+   "r": 0.32121212121212117,
+   "p": 0.3654683104386702
+  },
+  "spearman_vs_NAO_shift": {
+   "r": 0.18787878787878787,
+   "p": 0.603217610029209
+  }
+ }
+}

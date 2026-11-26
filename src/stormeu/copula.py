@@ -1,7 +1,7 @@
 """A spatial t-copula with distance decay and a day-to-day AR(1) in the normal scores, GPD-tailed margins per cell.
 
 This is a statistical emulator of daily gust fields, NOT a max-stable process: asymptotic dependence is controlled by the degrees of
-freedom only and is checked on held-out winters (joint exceedance of the 99th percentile by distance).
+freedom only; the spatial fit is checked on held-out winters (joint exceedance of the 99th percentile by distance).
 """
 import numpy as np
 import pandas as pd
@@ -60,16 +60,21 @@ def lag1(Z):
     return float(np.mean([np.corrcoef(a[:-1, j], a[1:, j])[0, 1] for j in range(a.shape[1])]))
 
 
-def simulate_scores(R_chol, days, rho, nu, rng, n_seasons=1):
-    """(n_seasons*days, cells) uniforms from the t copula with AR(1) normal scores."""
+def simulate_scores(R_chol, days, rho, nu, rng, n_seasons=1, kappa=0.0):
+    """(n_seasons*days, cells) uniforms from the t copula with AR(1) normal scores.
+
+    The chi-square mixing variable of the t copula follows its own AR(1) through a Gaussian transform (coefficient `kappa`), which keeps
+    the t margins and gives stormy spells some persistence; kappa = 0 draws it independently every day."""
     n = R_chol.shape[0]
     out = np.empty((n_seasons, days, n))
     z = rng.standard_normal((n_seasons, n)) @ R_chol.T
+    a = rng.standard_normal(n_seasons)
     for t in range(days):
         eps = rng.standard_normal((n_seasons, n)) @ R_chol.T
         z = rho * z + np.sqrt(1 - rho ** 2) * eps
         if np.isfinite(nu):
-            w = rng.chisquare(nu, size=(n_seasons, 1)) / nu
+            a = kappa * a + np.sqrt(1 - kappa ** 2) * rng.standard_normal(n_seasons)
+            w = stats.chi2.ppf(np.clip(stats.norm.cdf(a), 1e-12, 1 - 1e-12), nu)[:, None] / nu
             out[:, t] = stats.t.cdf(z / np.sqrt(w), nu)
         else:
             out[:, t] = stats.norm.cdf(z)

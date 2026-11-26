@@ -23,7 +23,7 @@ def country_index(L, countries):
 
 
 def define_events(day_index, min_share=None, gap=1, threshold=None):
-    """Events: consecutive days (gaps of up to `gap` days allowed) on which the domain index exceeds `threshold`.
+    """Events: runs of days (with the default gap=1, strictly consecutive days) on which the domain index exceeds `threshold`.
     Returns a DataFrame with start, end, days, peak_day, sum and max of the daily index."""
     thr = float(day_index.quantile(0.95)) if threshold is None else threshold
     on = day_index[day_index > thr]

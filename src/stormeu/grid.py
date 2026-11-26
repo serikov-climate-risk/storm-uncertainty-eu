@@ -1,4 +1,5 @@
 """Load the gridded daily gust maximum and rain sum (ERA5 through the Open-Meteo archive) and assign points to countries."""
+import warnings
 from pathlib import Path
 
 import geopandas as gpd
@@ -29,8 +30,11 @@ def assign_countries(columns, ne_zip):
     world = world[world["NAME"].isin(names)].copy()
     world["code"] = world["NAME"].map(names)
     out = {}
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Geometry is in a geographic CRS")
+        wide = world.geometry.buffer(0.35)   # 0.35 degrees on purpose: coarse 110m coastlines, 1 degree points near the coast
     for la, lo in columns:
-        hit = world[world.geometry.buffer(0.35).contains(Point(lo, la))]   # a little buffer: 1 degree points near coasts
+        hit = world[wide.contains(Point(lo, la))]
         if len(hit):
             inside = world[world.geometry.contains(Point(lo, la))]
             out[(la, lo)] = (inside if len(inside) else hit).iloc[0]["code"]
